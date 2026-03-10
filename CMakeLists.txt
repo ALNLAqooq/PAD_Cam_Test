@@ -16,8 +16,14 @@ find_package(Qt5 REQUIRED COMPONENTS
 
 add_executable(PADCamResolutionProbe WIN32
     src/main.cpp
+    src/CameraBackend.h
+    src/CameraBackend.cpp
     src/MainWindow.h
     src/MainWindow.cpp
+    src/QtCameraBackend.h
+    src/QtCameraBackend.cpp
+    src/WindowsNativeCameraBackend.h
+    src/WindowsNativeCameraBackend.cpp
 )
 
 target_link_libraries(PADCamResolutionProbe PRIVATE
@@ -25,6 +31,16 @@ target_link_libraries(PADCamResolutionProbe PRIVATE
     Qt5::Multimedia
     Qt5::MultimediaWidgets
 )
+
+if (WIN32)
+    target_link_libraries(PADCamResolutionProbe PRIVATE
+        mf
+        mfplat
+        mfreadwrite
+        mfuuid
+        ole32
+    )
+endif()
 
 if (MSVC)
     target_compile_options(PADCamResolutionProbe PRIVATE /utf-8)
