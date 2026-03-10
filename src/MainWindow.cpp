@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include <QCameraExposure>
 #include <QCameraFocus>
 #include <QCameraViewfinder>
 #include <QComboBox>
@@ -431,6 +432,7 @@ void MainWindow::onCameraStatusChanged(QCamera::Status status)
 
     if (status == QCamera::ActiveStatus && !m_focusCapabilitiesLogged) {
         logFocusCapabilities();
+        logFlashCapabilities();
         m_focusCapabilitiesLogged = true;
     }
 }
@@ -617,6 +619,36 @@ void MainWindow::logFocusCapabilities()
     logMessage(QStringLiteral("支持中心对焦点：%1").arg(supportToText(supportsCenterPoint)));
     logMessage(QStringLiteral("支持自定义对焦点：%1").arg(supportToText(supportsCustomPoint)));
     logMessage(QStringLiteral("支持点击对焦：%1").arg(supportToText(supportsTapToFocus)));
+}
+
+void MainWindow::logFlashCapabilities()
+{
+    if (!m_camera) {
+        return;
+    }
+
+    QCameraExposure *exposure = m_camera->exposure();
+    if (!exposure) {
+        logMessage(QStringLiteral("闪光灯能力检测：Qt 未返回 QCameraExposure 对象。"));
+        return;
+    }
+
+    const bool exposureAvailable = exposure->isAvailable();
+    const bool flashReady = exposure->isFlashReady();
+    const bool supportsFlashOff = exposure->isFlashModeSupported(QCameraExposure::FlashOff);
+    const bool supportsFlashOn = exposure->isFlashModeSupported(QCameraExposure::FlashOn);
+    const bool supportsFlashAuto = exposure->isFlashModeSupported(QCameraExposure::FlashAuto);
+    const bool supportsTorch = exposure->isFlashModeSupported(QCameraExposure::FlashTorch);
+    const bool supportsVideoLight = exposure->isFlashModeSupported(QCameraExposure::FlashVideoLight);
+
+    logMessage(QStringLiteral("=== 闪光灯能力检测 ==="));
+    logMessage(QStringLiteral("曝光接口可用：%1").arg(supportToText(exposureAvailable)));
+    logMessage(QStringLiteral("闪光灯已就绪：%1").arg(supportToText(flashReady)));
+    logMessage(QStringLiteral("支持 FlashOff：%1").arg(supportToText(supportsFlashOff)));
+    logMessage(QStringLiteral("支持 FlashOn：%1").arg(supportToText(supportsFlashOn)));
+    logMessage(QStringLiteral("支持 FlashAuto：%1").arg(supportToText(supportsFlashAuto)));
+    logMessage(QStringLiteral("支持 FlashTorch：%1").arg(supportToText(supportsTorch)));
+    logMessage(QStringLiteral("支持 FlashVideoLight：%1").arg(supportToText(supportsVideoLight)));
 }
 
 void MainWindow::updateCapabilityText()

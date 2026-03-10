@@ -46,6 +46,7 @@ private:
     void releaseCamera();
     void refreshCameraCapabilities();
     void logFocusCapabilities();
+    void logFlashCapabilities();
     void updateCapabilityText();
     void updateButtonStates();
     void logMessage(const QString &message);
