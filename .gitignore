@@ -1,0 +1,52 @@
+# Qt Creator
+*.user
+*.user.local
+*.user.workspace
+*.creator
+*.creator.local
+*.qbs.user
+*.qbs.user.local
+
+# Build directories
+build/
+bin/
+obj/
+Debug/
+Release/
+x64/
+x86/
+.cmake/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.qmlc
+*.jsc
+
+# Deploy directories (Qt 运行时和 DLL 文件)
+deploy/
+
+# Qt Creator auto generated files
+*.qmlproject
+*.qmlproject.user
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
