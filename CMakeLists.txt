@@ -39,6 +39,8 @@ if (WIN32)
         mfreadwrite
         mfuuid
         ole32
+        strmiids
+        ksproxy
     )
 endif()
 

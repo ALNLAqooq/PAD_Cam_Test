@@ -8,11 +8,13 @@
 #include <QImageEncoderSettings>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QTimer>
 #include <QVideoFrame>
 #include <QVideoProbe>
 #include <QVideoWidget>
 
 #include <algorithm>
+#include <atomic>
 
 namespace
 {
@@ -116,6 +118,9 @@ QtCameraBackend::QtCameraBackend(QObject *parent)
     , m_viewfinderWidget(nullptr)
     , m_currentCameraIndex(-1)
     , m_focusCapabilitiesLogged(false)
+    , m_lastFrameTime(0)
+    , m_currentFps(0.0)
+    , m_fpsTimer(nullptr)
 {
 }
 
@@ -222,6 +227,26 @@ void QtCameraBackend::openCamera(int cameraIndex)
     } else {
         emit logMessage(QStringLiteral("预览帧检测启用失败。"));
     }
+
+    // 重置 FPS 统计
+    m_lastFrameTime.store(0);
+    m_currentFps.store(0.0);
+
+    // 停止之前的 FPS 定时器（如果有）
+    if (m_fpsTimer) {
+        m_fpsTimer->stop();
+        m_fpsTimer->deleteLater();
+    }
+
+    // 启动 FPS 更新定时器（每秒一次）
+    m_fpsTimer = new QTimer(this);
+    connect(m_fpsTimer, &QTimer::timeout, this, [this]() {
+        double fps = m_currentFps.load();
+        if (fps > 0) {
+            emit fpsChanged(fps);
+        }
+    });
+    m_fpsTimer->start(1000);
 
     m_camera->load();
     m_camera->start();
@@ -343,6 +368,13 @@ QString QtCameraBackend::capabilityText() const
     return m_capabilityText;
 }
 
+void QtCameraBackend::requestFocusAt(qreal normalizedX, qreal normalizedY)
+{
+    Q_UNUSED(normalizedX)
+    Q_UNUSED(normalizedY)
+    emit logMessage(QStringLiteral("Qt 后端暂未接入点击对焦接口。"));
+}
+
 void QtCameraBackend::onCameraStatusChanged(QCamera::Status status)
 {
     emit statusTextChanged(statusToText(status));
@@ -406,6 +438,18 @@ void QtCameraBackend::onVideoFrameProbed(const QVideoFrame &frame)
     if (frameSize.isValid()) {
         emit frameTextChanged(sizeToText(frameSize));
     }
+
+    // 计算帧率
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    qint64 lastTime = m_lastFrameTime.load();
+    if (lastTime > 0) {
+        qint64 diff = currentTime - lastTime;
+        if (diff > 0) {
+            double fps = 1000.0 / static_cast<double>(diff);
+            m_currentFps.store(fps);
+        }
+    }
+    m_lastFrameTime.store(currentTime);
 }
 
 void QtCameraBackend::releaseCamera()
@@ -447,11 +491,19 @@ void QtCameraBackend::releaseCamera()
     m_currentCameraIndex = -1;
     m_focusCapabilitiesLogged = false;
 
+    // 停止 FPS 定时器
+    if (m_fpsTimer) {
+        m_fpsTimer->stop();
+        m_fpsTimer->deleteLater();
+        m_fpsTimer = nullptr;
+    }
+
     emit stateTextChanged(QStringLiteral("-"));
     emit statusTextChanged(QStringLiteral("-"));
     emit frameTextChanged(QStringLiteral("-"));
     emit photoTextChanged(QStringLiteral("-"));
     emit readyForCaptureChanged(false);
+    emit fpsChanged(0.0);
     emit capabilitiesChanged();
 }
 

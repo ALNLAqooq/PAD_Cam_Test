@@ -42,6 +42,7 @@ public:
     QVector<PreviewOption> previewOptions() const override;
     QVector<CaptureOption> captureOptions() const override;
     QString capabilityText() const override;
+    void requestFocusAt(qreal normalizedX, qreal normalizedY) override;
 
 private slots:
     void onCameraStatusChanged(QCamera::Status status);
@@ -72,6 +73,11 @@ private:
     QString m_capabilityText;
     int m_currentCameraIndex;
     bool m_focusCapabilitiesLogged;
+
+    // FPS 统计
+    std::atomic<qint64> m_lastFrameTime;
+    std::atomic<double> m_currentFps;
+    QTimer *m_fpsTimer;
 };
 
 #endif // QT_CAMERA_BACKEND_H

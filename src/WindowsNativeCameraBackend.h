@@ -4,6 +4,7 @@
 #include "CameraBackend.h"
 
 #include <QImage>
+#include <QDateTime>
 #include <QtGlobal>
 #include <atomic>
 #include <mutex>
@@ -11,6 +12,9 @@
 
 class QLabel;
 class QWidget;
+struct IMFSourceReader;
+struct IAMCameraControl;
+struct IKsControl;
 
 class WindowsNativeCameraBackend : public CameraBackend
 {
@@ -40,6 +44,7 @@ public:
     QVector<PreviewOption> previewOptions() const override;
     QVector<CaptureOption> captureOptions() const override;
     QString capabilityText() const override;
+    void requestFocusAt(qreal normalizedX, qreal normalizedY) override;
 
 private:
     struct NativeMode
@@ -55,6 +60,16 @@ private:
     void updateCapabilityText();
     void stopPreviewWorker();
     void showPreviewMessage(const QString &message);
+    void setSourceReader(IMFSourceReader *reader);
+    void clearControlInterfaces();
+    void probeFocusCapabilities();
+    void refreshModesFromSourceReader(IMFSourceReader *reader);
+    void rebuildOptionsFromNativeModes(const QVector<NativeMode> &modes);
+    bool applyFocusRequest(qreal normalizedX, qreal normalizedY);
+    bool applyAutoFocus();
+    bool applyRoiFocus(qreal normalizedX, qreal normalizedY);
+    bool enumerateNativeModesMta(const QString &cameraId, QVector<NativeMode> &outModes);
+    bool enumerateNativeModesByMediaSourceMta(const QString &cameraId, QVector<NativeMode> &outModes);
 
     QVector<CameraDeviceInfo> m_cameras;
     QVector<PreviewOption> m_previewOptions;
@@ -73,6 +88,24 @@ private:
     int m_currentCameraIndex;
     std::mutex m_frameMutex;
     QImage m_lastFrame;
+    IMFSourceReader *m_sourceReader;
+    IAMCameraControl *m_cameraControl;
+    IKsControl *m_ksControl;
+    std::mutex m_controlMutex;
+    std::atomic_bool m_focusRequestPending;
+    std::mutex m_focusRequestMutex;
+    qreal m_focusRequestX;
+    qreal m_focusRequestY;
+    QSize m_currentPreviewSize;
+    bool m_focusSupported;
+    bool m_focusSupportsAuto;
+    bool m_roiSupported;
+    long m_focusDefaultValue;
+
+    // 帧率统计
+    std::atomic<qint64> m_lastFrameTime;
+    std::atomic<double> m_currentFps;
+    QTimer *m_fpsTimer;
 };
 
 #endif // WINDOWS_NATIVE_CAMERA_BACKEND_H

@@ -19,6 +19,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     void refreshCameras();
     void openSelectedCamera();
@@ -34,6 +37,7 @@ private slots:
     void onBackendFrameTextChanged(const QString &text);
     void onBackendPhotoTextChanged(const QString &text);
     void onBackendReadyForCaptureChanged(bool ready);
+    void onBackendFpsChanged(double fps);
 
 private:
     void setupUi();
@@ -44,6 +48,7 @@ private:
     void resetStatusLabels();
     void updateButtonStates();
     void logMessage(const QString &message);
+    bool handlePreviewClick(QObject *watched, const QPoint &pos);
 
     CameraBackend *m_backend;
 
@@ -59,11 +64,13 @@ private:
     QPushButton *m_captureButton;
     QWidget *m_previewContainer;
     QVBoxLayout *m_previewLayout;
+    QWidget *m_previewWidget;
     QLabel *m_stateValueLabel;
     QLabel *m_statusValueLabel;
     QLabel *m_frameValueLabel;
     QLabel *m_photoValueLabel;
     QLabel *m_readyValueLabel;
+    QLabel *m_fpsValueLabel;
     QPlainTextEdit *m_capabilityEdit;
     QPlainTextEdit *m_logEdit;
 };

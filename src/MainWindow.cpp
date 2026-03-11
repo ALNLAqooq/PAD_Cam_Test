@@ -5,10 +5,12 @@
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QEvent>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSizePolicy>
@@ -46,11 +48,13 @@ MainWindow::MainWindow(QWidget *parent)
     , m_captureButton(nullptr)
     , m_previewContainer(nullptr)
     , m_previewLayout(nullptr)
+    , m_previewWidget(nullptr)
     , m_stateValueLabel(nullptr)
     , m_statusValueLabel(nullptr)
     , m_frameValueLabel(nullptr)
     , m_photoValueLabel(nullptr)
     , m_readyValueLabel(nullptr)
+    , m_fpsValueLabel(nullptr)
     , m_capabilityEdit(nullptr)
     , m_logEdit(nullptr)
 {
@@ -59,7 +63,18 @@ MainWindow::MainWindow(QWidget *parent)
     logMessage(QStringLiteral("程序已启动。"));
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    if (m_backend) {
+        m_backend->blockSignals(true);
+        disconnect(m_backend, nullptr, this, nullptr);
+        m_backend->stopCamera();
+        delete m_backend;
+        m_backend = nullptr;
+    }
+
+    replacePreviewWidget(nullptr);
+}
 
 void MainWindow::setupUi()
 {
@@ -97,6 +112,7 @@ void MainWindow::setupUi()
     m_frameValueLabel = new QLabel(QStringLiteral("-"), this);
     m_photoValueLabel = new QLabel(QStringLiteral("-"), this);
     m_readyValueLabel = new QLabel(QStringLiteral("-"), this);
+    m_fpsValueLabel = new QLabel(QStringLiteral("-"), this);
 
     QFormLayout *infoLayout = new QFormLayout;
     infoLayout->addRow(QStringLiteral("状态"), m_stateValueLabel);
@@ -104,6 +120,7 @@ void MainWindow::setupUi()
     infoLayout->addRow(QStringLiteral("预览帧"), m_frameValueLabel);
     infoLayout->addRow(QStringLiteral("最近照片"), m_photoValueLabel);
     infoLayout->addRow(QStringLiteral("可拍照"), m_readyValueLabel);
+    infoLayout->addRow(QStringLiteral("帧率"), m_fpsValueLabel);
 
     QWidget *leftPanel = new QWidget(this);
     QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
@@ -167,6 +184,18 @@ void MainWindow::setupUi()
 
     resetStatusLabels();
     updateButtonStates();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_previewWidget && event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
+            return handlePreviewClick(watched, mouseEvent->pos());
+        }
+    }
+
+    return QWidget::eventFilter(watched, event);
 }
 
 void MainWindow::refreshCameras()
@@ -278,6 +307,11 @@ void MainWindow::onBackendReadyForCaptureChanged(bool ready)
     updateButtonStates();
 }
 
+void MainWindow::onBackendFpsChanged(double fps)
+{
+    m_fpsValueLabel->setText(QString::number(fps, 'f', 2) + QStringLiteral(" fps"));
+}
+
 void MainWindow::setupBackend(CameraBackendType backendType)
 {
     if (m_backend && m_backend->backendType() == backendType) {
@@ -312,6 +346,7 @@ void MainWindow::setupBackend(CameraBackendType backendType)
     connect(m_backend, &CameraBackend::frameTextChanged, this, &MainWindow::onBackendFrameTextChanged);
     connect(m_backend, &CameraBackend::photoTextChanged, this, &MainWindow::onBackendPhotoTextChanged);
     connect(m_backend, &CameraBackend::readyForCaptureChanged, this, &MainWindow::onBackendReadyForCaptureChanged);
+    connect(m_backend, &CameraBackend::fpsChanged, this, &MainWindow::onBackendFpsChanged);
     connect(m_backend, &CameraBackend::logMessage, this, &MainWindow::logMessage);
 
     replacePreviewWidget(m_backend->createPreviewWidget(m_previewContainer));
@@ -322,6 +357,10 @@ void MainWindow::setupBackend(CameraBackendType backendType)
 
 void MainWindow::replacePreviewWidget(QWidget *widget)
 {
+    if (m_previewWidget) {
+        m_previewWidget->removeEventFilter(this);
+    }
+
     while (QLayoutItem *item = m_previewLayout->takeAt(0)) {
         if (item->widget()) {
             item->widget()->hide();
@@ -334,7 +373,11 @@ void MainWindow::replacePreviewWidget(QWidget *widget)
         widget->setParent(m_previewContainer);
         m_previewLayout->addWidget(widget);
         widget->show();
+        widget->installEventFilter(this);
+        widget->setCursor(Qt::CrossCursor);
     }
+
+    m_previewWidget = widget;
 }
 
 void MainWindow::populateCameraCombo()
@@ -434,4 +477,52 @@ void MainWindow::logMessage(const QString &message)
                              .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")))
                              .arg(message);
     m_logEdit->appendPlainText(line);
+}
+
+bool MainWindow::handlePreviewClick(QObject *watched, const QPoint &pos)
+{
+    if (!m_backend) {
+        return false;
+    }
+
+    QWidget *widget = qobject_cast<QWidget *>(watched);
+    if (!widget) {
+        return false;
+    }
+
+    qreal normalizedX = 0.5;
+    qreal normalizedY = 0.5;
+
+    if (QLabel *label = qobject_cast<QLabel *>(widget)) {
+        const QPixmap *pixmap = label->pixmap();
+        if (pixmap && !pixmap->isNull()) {
+            const QSize widgetSize = label->size();
+            const QSize scaledSize = pixmap->size().scaled(widgetSize, Qt::KeepAspectRatio);
+            const int offsetX = (widgetSize.width() - scaledSize.width()) / 2;
+            const int offsetY = (widgetSize.height() - scaledSize.height()) / 2;
+            const QRect contentRect(offsetX, offsetY, scaledSize.width(), scaledSize.height());
+            if (!contentRect.contains(pos)) {
+                return true;
+            }
+            normalizedX = static_cast<qreal>(pos.x() - offsetX) / static_cast<qreal>(scaledSize.width());
+            normalizedY = static_cast<qreal>(pos.y() - offsetY) / static_cast<qreal>(scaledSize.height());
+        } else {
+            if (widget->width() <= 0 || widget->height() <= 0) {
+                return false;
+            }
+            normalizedX = static_cast<qreal>(pos.x()) / static_cast<qreal>(widget->width());
+            normalizedY = static_cast<qreal>(pos.y()) / static_cast<qreal>(widget->height());
+        }
+    } else {
+        if (widget->width() <= 0 || widget->height() <= 0) {
+            return false;
+        }
+        normalizedX = static_cast<qreal>(pos.x()) / static_cast<qreal>(widget->width());
+        normalizedY = static_cast<qreal>(pos.y()) / static_cast<qreal>(widget->height());
+    }
+
+    normalizedX = qBound<qreal>(0.0, normalizedX, 1.0);
+    normalizedY = qBound<qreal>(0.0, normalizedY, 1.0);
+    m_backend->requestFocusAt(normalizedX, normalizedY);
+    return true;
 }

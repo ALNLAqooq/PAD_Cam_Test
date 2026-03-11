@@ -65,6 +65,7 @@ public:
     virtual QVector<PreviewOption> previewOptions() const = 0;
     virtual QVector<CaptureOption> captureOptions() const = 0;
     virtual QString capabilityText() const = 0;
+    virtual void requestFocusAt(qreal normalizedX, qreal normalizedY) = 0;
 
 signals:
     void camerasChanged();
@@ -75,6 +76,7 @@ signals:
     void frameTextChanged(const QString &text);
     void photoTextChanged(const QString &text);
     void readyForCaptureChanged(bool ready);
+    void fpsChanged(double fps);
 };
 
 #endif // CAMERA_BACKEND_H
